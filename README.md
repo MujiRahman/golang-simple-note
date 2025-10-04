@@ -155,7 +155,7 @@ myproject/
 │── main.go
 │
 ├── cmd/ # Entry point aplikasi (bisa ada banyak)
-│ └── api/
+│ └── server/
 │ └── main.go # Entry point untuk API server
 │
 ├── config/ # File konfigurasi (yaml, json, env)
@@ -179,7 +179,11 @@ myproject/
 │ └── category_test.go
 │
 └── docs/ # Dokumentasi (API Spec, OpenAPI/Swagger)
-└── openapi.yaml
+├── .env # Environment variables
+├── .gitignore
+├── go.mod
+├── go.sum
+└── README.md
 
 my-app/
 ├── cmd/

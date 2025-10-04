@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: ${MARIADB_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${DB_TIMEZONE} # Set timezone untuk container
+    ports:
+      - "${MARIADB_HOST_PORT}:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ../init:/docker-entrypoint-initdb.d # Jika ada script inisialisasi
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Optional: Jika Anda punya aplikasi
+  app:
+    # image: your-app-image  # Uncomment jika sudah ada
+    container_name: ${APP_CONTAINER_NAME}
+    # build: ../  # Jika build dari Dockerfile
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_TIMEZONE=${DB_TIMEZONE}
+      - DB_MAX_OPEN_CONNECTIONS=${DB_MAX_OPEN_CONNECTIONS}
+      - DB_MAX_IDLE_CONNECTIONS=${DB_MAX_IDLE_CONNECTIONS}
+      - DB_CONNECTION_MAX_LIFETIME=${DB_CONNECTION_MAX_LIFETIME}
+      - APP_PORT=${APP_PORT}
+      - APP_ENV=${APP_ENV}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - app_network
+    # Comment bagian ini jika belum ada aplikasi
+    profiles:
+      - with-app # Gunakan profile untuk optional service
+
+volumes:
+  mariadb_data:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
+    name: ${NETWORK_NAME}

@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/MujiRahman/golang-simple-note/internal/helper"
 	"github.com/MujiRahman/golang-simple-note/internal/service"
 	"github.com/julienschmidt/httprouter"
 
-	"github.com/yourusername/noteapp/pkg/contextkey"
+	"github.com/MujiRahman/golang-simple-note/pkg/contextkey"
 )
 
 type NoteController struct {
@@ -28,25 +29,25 @@ func (c *NoteController) Create(w http.ResponseWriter, r *http.Request, _ httpro
 	userID := r.Context().Value(contextkey.UserIDKey).(uint)
 	var req createNoteReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 		return
 	}
 	n, err := c.noteSvc.Create(userID, req.Title, req.Content)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		helper.RespondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	respondJSON(w, http.StatusCreated, n)
+	helper.RespondJSON(w, http.StatusCreated, n)
 }
 
 func (c *NoteController) List(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	userID := r.Context().Value(contextkey.UserIDKey).(uint)
 	notes, err := c.noteSvc.ListByUser(userID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		helper.RespondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	respondJSON(w, http.StatusOK, notes)
+	helper.RespondJSON(w, http.StatusOK, notes)
 }
 
 func (c *NoteController) Get(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -54,15 +55,15 @@ func (c *NoteController) Get(w http.ResponseWriter, r *http.Request, ps httprout
 	idStr := ps.ByName("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
 	n, err := c.noteSvc.GetByID(userID, uint(id64))
 	if err != nil {
-		respondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		helper.RespondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	respondJSON(w, http.StatusOK, n)
+	helper.RespondJSON(w, http.StatusOK, n)
 }
 
 func (c *NoteController) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -70,20 +71,20 @@ func (c *NoteController) Update(w http.ResponseWriter, r *http.Request, ps httpr
 	idStr := ps.ByName("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
 	var req createNoteReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 		return
 	}
 	n, err := c.noteSvc.Update(userID, uint(id64), req.Title, req.Content)
 	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	respondJSON(w, http.StatusOK, n)
+	helper.RespondJSON(w, http.StatusOK, n)
 }
 
 func (c *NoteController) Delete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -91,12 +92,12 @@ func (c *NoteController) Delete(w http.ResponseWriter, r *http.Request, ps httpr
 	idStr := ps.ByName("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
 	if err := c.noteSvc.Delete(userID, uint(id64)); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	respondJSON(w, http.StatusNoContent, nil)
+	helper.RespondJSON(w, http.StatusNoContent, nil)
 }

@@ -1,0 +1,147 @@
+{
+  "info": {
+    "name": "golang-simple-note (mockserver)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0",
+    "_postman_id": "golang-simple-note-mock"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8081" },
+    { "key": "username", "value": "user1" },
+    { "key": "password", "value": "pass1" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["register"]
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// save token to environment variable",
+              "if (pm.response.code === 200) {",
+              "  var j = pm.response.json();",
+              "  if (j.token) { pm.environment.set('token', j.token); }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Note",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"My note\",\n  \"content\": \"Hello from Postman\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/notes",
+          "host": ["{{baseUrl}}"],
+          "path": ["notes"]
+        }
+      }
+    },
+    {
+      "name": "List Notes",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/notes",
+          "host": ["{{baseUrl}}"],
+          "path": ["notes"]
+        }
+      }
+    },
+    {
+      "name": "Get Note (id=1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/notes/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["notes","1"]
+        }
+      }
+    },
+    {
+      "name": "Update Note (id=1)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated title\",\n  \"content\": \"Updated content\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/notes/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["notes","1"]
+        }
+      }
+    },
+    {
+      "name": "Delete Note (id=1)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/notes/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["notes","1"]
+        }
+      }
+    }
+  ]
+}

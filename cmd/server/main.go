@@ -5,8 +5,6 @@ import (
 
 	"github.com/MujiRahman/golang-simple-note/config"
 	"github.com/MujiRahman/golang-simple-note/internal/app"
-	"github.com/MujiRahman/golang-simple-note/internal/repository"
-	"github.com/MujiRahman/golang-simple-note/internal/service"
 	"github.com/MujiRahman/golang-simple-note/pkg/logger"
 )
 
@@ -16,11 +14,10 @@ func main() {
 	cfg := config.LoadConfig()
 	connection := app.NewDB(cfg)
 
-	userRepo := repository.NewUserRepository(connection.DB)
-	userService := service.NewUserService(userRepo, cfg)
-
-	noteRepo := repository.NewNoteRepository(connection.DB)
-	noteService := service.NewNoteService(noteRepo)
+	// centralize wiring of repos & services
+	container := app.NewContainer(connection, cfg)
+	userService := container.Svcs.User
+	noteService := container.Svcs.Note
 
 	router := app.NewRouter(userService, noteService, cfg)
 	http.ListenAndServe(":8080", router)

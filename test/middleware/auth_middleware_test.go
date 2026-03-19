@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 
 	"github.com/MujiRahman/golang-simple-note/internal/model"
 	"github.com/MujiRahman/golang-simple-note/pkg/contextkey"
@@ -25,67 +25,73 @@ func (f *fakeUserService) Register(username, password string) (*model.User, erro
 func (f *fakeUserService) Login(username, password string) (string, error) { return "", nil }
 func (f *fakeUserService) ParseToken(tokenStr string) (uint, error)        { return f.uid, f.err }
 
-func protectedHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	v := r.Context().Value(contextkey.UserIDKey)
-	if v == nil {
-		http.Error(w, "no user", http.StatusInternalServerError)
-		return
-	}
-	uid := v.(uint)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("%d", uid)))
-}
-
 func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	mw := middleware.AuthMiddleware(&fakeUserService{uid: 0, err: nil})
-	h := mw(protectedHandler)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
-	h(rr, req, httprouter.Params{})
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rr.Code)
+	// Create a test gin context
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+
+	// Call the middleware
+	mw(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
 
 func TestAuthMiddleware_InvalidHeaderFormat(t *testing.T) {
 	mw := middleware.AuthMiddleware(&fakeUserService{uid: 0, err: nil})
-	h := mw(protectedHandler)
 
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bad token")
-	rr := httptest.NewRecorder()
-	h(rr, req, httprouter.Params{})
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rr.Code)
+	c.Request = req
+
+	mw(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	mw := middleware.AuthMiddleware(&fakeUserService{uid: 0, err: fmt.Errorf("invalid")})
-	h := mw(protectedHandler)
 
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer badtoken")
-	rr := httptest.NewRecorder()
-	h(rr, req, httprouter.Params{})
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rr.Code)
+	c.Request = req
+
+	mw(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	mw := middleware.AuthMiddleware(&fakeUserService{uid: 77, err: nil})
-	h := mw(protectedHandler)
 
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer goodtoken")
-	rr := httptest.NewRecorder()
-	h(rr, req, httprouter.Params{})
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d, body=%s", rr.Code, rr.Body.String())
+	c.Request = req
+
+	// Call middleware
+	mw(c)
+
+	// Check that the token was injected
+	uid := c.GetUint(string(contextkey.UserIDKey))
+	if uid != 77 {
+		t.Fatalf("expected uid 77, got %d", uid)
 	}
-	if rr.Body.String() != "77" {
-		t.Fatalf("expected body 77, got %s", rr.Body.String())
+
+	if w.Code != http.StatusOK && w.Code != 0 {
+		t.Fatalf("expected 200 or no status (middleware passed through), got %d", w.Code)
 	}
 }

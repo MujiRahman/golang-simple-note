@@ -1,12 +1,11 @@
 package controller
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/MujiRahman/golang-simple-note/internal/helper"
+	"github.com/gin-gonic/gin"
+
 	"github.com/MujiRahman/golang-simple-note/internal/service"
-	"github.com/julienschmidt/httprouter"
 )
 
 type UserController struct {
@@ -27,30 +26,30 @@ type loginReq struct {
 	Password string `json:"password"`
 }
 
-func (c *UserController) Register(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (c *UserController) Register(ctx *gin.Context) {
 	var req registerReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
 	u, err := c.userSvc.Register(req.Username, req.Password)
 	if err != nil {
-		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	helper.RespondJSON(w, http.StatusCreated, map[string]any{"id": u.ID, "username": u.Username})
+	ctx.JSON(http.StatusCreated, gin.H{"id": u.ID, "username": u.Username})
 }
 
-func (c *UserController) Login(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (c *UserController) Login(ctx *gin.Context) {
 	var req loginReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		helper.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
 	token, err := c.userSvc.Login(req.Username, req.Password)
 	if err != nil {
-		helper.RespondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	helper.RespondJSON(w, http.StatusOK, map[string]string{"token": token})
+	ctx.JSON(http.StatusOK, gin.H{"token": token})
 }

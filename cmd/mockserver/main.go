@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 )
 
 type User struct {
@@ -30,97 +28,88 @@ var (
 )
 
 func main() {
-	r := httprouter.New()
+	r := gin.Default()
 
 	r.POST("/register", handleRegister)
 	r.POST("/login", handleLogin)
 
 	// protected
-	r.POST("/notes", auth(handleCreateNote))
-	r.GET("/notes", auth(handleListNotes))
-	r.GET("/notes/:id", auth(handleGetNote))
-	r.PUT("/notes/:id", auth(handleUpdateNote))
-	r.DELETE("/notes/:id", auth(handleDeleteNote))
+	r.POST("/notes", authMiddleware(), handleCreateNote)
+	r.GET("/notes", authMiddleware(), handleListNotes)
+	r.GET("/notes/:id", authMiddleware(), handleGetNote)
+	r.PUT("/notes/:id", authMiddleware(), handleUpdateNote)
+	r.DELETE("/notes/:id", authMiddleware(), handleDeleteNote)
 
-	http.ListenAndServe(":8081", r)
+	r.Run(":8081")
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if v == nil {
-		return
-	}
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func handleRegister(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func handleRegister(c *gin.Context) {
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	if err := c.ShouldBindJSON(&req); err != nil || req.Username == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
 	if _, ok := users[req.Username]; ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username already used"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username already used"})
 		return
 	}
 	u := &User{ID: nextUser, Username: req.Username}
 	users[req.Username] = u
 	userPw[req.Username] = req.Password
 	nextUser++
-	writeJSON(w, http.StatusCreated, u)
+	c.JSON(http.StatusCreated, u)
 }
 
-func handleLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func handleLogin(c *gin.Context) {
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	if err := c.ShouldBindJSON(&req); err != nil || req.Username == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
 	u, ok := users[req.Username]
 	if !ok || userPw[req.Username] != req.Password {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 	// mock token: "mock-<id>"
 	token := "mock-" + strconv.FormatUint(uint64(u.ID), 10)
-	writeJSON(w, http.StatusOK, map[string]string{"token": token})
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-// auth middleware: check header Authorization: Bearer mock-<id>
-func auth(h httprouter.Handle) httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		ah := r.Header.Get("Authorization")
+// authMiddleware: check header Authorization: Bearer mock-<id>
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ah := c.GetHeader("Authorization")
 		if len(ah) < 8 || ah[:7] != "Bearer " {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid authorization header"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization header"})
 			return
 		}
 		token := ah[7:]
 		// token format mock-<id>
 		if len(token) < 6 || token[:5] != "mock-" {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 		idStr := token[5:]
 		id64, err := strconv.ParseUint(idStr, 10, 64)
 		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 		// inject into context
-		ctx := context.WithValue(r.Context(), "user_id", uint(id64))
-		h(w, r.WithContext(ctx), ps)
+		c.Set("user_id", uint(id64))
+		c.Next()
 	}
 }
 
-func getUserID(r *http.Request) uint {
-	if v := r.Context().Value("user_id"); v != nil {
+func getUserID(c *gin.Context) uint {
+	if v, exists := c.Get("user_id"); exists {
 		if uid, ok := v.(uint); ok {
 			return uid
 		}
@@ -128,94 +117,100 @@ func getUserID(r *http.Request) uint {
 	return 0
 }
 
-func handleCreateNote(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var req struct{ Title, Content string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+func handleCreateNote(c *gin.Context) {
+	var req struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
-	uid := getUserID(r)
+	uid := getUserID(c)
 	n := &Note{ID: nextNote, UserID: uid, Title: req.Title, Content: req.Content}
 	notes[nextNote] = n
 	nextNote++
-	writeJSON(w, http.StatusCreated, n)
+	c.JSON(http.StatusCreated, n)
 }
 
-func handleListNotes(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	uid := getUserID(r)
+func handleListNotes(c *gin.Context) {
+	uid := getUserID(c)
 	var out []Note
 	for _, n := range notes {
 		if n.UserID == uid {
 			out = append(out, *n)
 		}
 	}
-	writeJSON(w, http.StatusOK, out)
+	c.JSON(http.StatusOK, out)
 }
 
-func handleGetNote(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	idStr := ps.ByName("id")
+func handleGetNote(c *gin.Context) {
+	idStr := c.Param("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 	n, ok := notes[uint(id64)]
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	uid := getUserID(r)
+	uid := getUserID(c)
 	if n.UserID != uid {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found or access denied"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found or access denied"})
 		return
 	}
-	writeJSON(w, http.StatusOK, n)
+	c.JSON(http.StatusOK, n)
 }
 
-func handleUpdateNote(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	idStr := ps.ByName("id")
+func handleUpdateNote(c *gin.Context) {
+	idStr := c.Param("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	var req struct{ Title, Content string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	var req struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
 	}
 	n, ok := notes[uint(id64)]
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	uid := getUserID(r)
+	uid := getUserID(c)
 	if n.UserID != uid {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not found or access denied"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not found or access denied"})
 		return
 	}
 	n.Title = req.Title
 	n.Content = req.Content
-	writeJSON(w, http.StatusOK, n)
+	c.JSON(http.StatusOK, n)
 }
 
-func handleDeleteNote(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	idStr := ps.ByName("id")
+func handleDeleteNote(c *gin.Context) {
+	idStr := c.Param("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 	n, ok := notes[uint(id64)]
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	uid := getUserID(r)
+	uid := getUserID(c)
 	if n.UserID != uid {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not found or access denied"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not found or access denied"})
 		return
 	}
 	delete(notes, uint(id64))
-	writeJSON(w, http.StatusNoContent, nil)
+	c.JSON(http.StatusNoContent, nil)
 }
